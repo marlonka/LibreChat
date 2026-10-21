@@ -64,7 +64,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 3, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 3, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(listPrompts).toHaveBeenCalledTimes(3);
     expect(listPrompts).toHaveBeenNthCalledWith(1, { type: 'text', limit: 100, page: 1 });
     expect(listPrompts).toHaveBeenNthCalledWith(2, { type: 'text', limit: 100, page: 2 });
@@ -81,7 +84,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(deps.lock.extend).not.toHaveBeenCalled();
     expect(deps.lock.release).toHaveBeenCalledTimes(1);
   });
@@ -110,7 +116,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(listPrompts).toHaveBeenCalledTimes(2);
     expect(deps.logger.warn).not.toHaveBeenCalled();
   });
@@ -125,7 +134,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 2, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 2, unchanged: 0, skipped: 0, complete: false },
+    });
     expect(listPrompts).toHaveBeenCalledTimes(2);
   });
 
@@ -139,7 +151,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 2, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 2, unchanged: 0, skipped: 0, complete: false },
+    });
     expect(listPrompts).toHaveBeenCalledTimes(2);
     expect(deps.logger.warn).toHaveBeenCalledTimes(1);
     expect(deps.logger.warn).toHaveBeenCalledWith(
@@ -158,7 +173,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: false },
+    });
     expect(deps.lock.extend).not.toHaveBeenCalled();
     expect(deps.logger.warn).toHaveBeenCalledTimes(1);
     expect(deps.logger.warn).toHaveBeenCalledWith(
@@ -185,7 +203,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 1, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 1, skipped: 0, complete: true },
+    });
     expect(deps.createPromptGroup).not.toHaveBeenCalled();
     expect(deps.grantPublicViewer).not.toHaveBeenCalled();
   });
@@ -197,7 +218,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(deps.createPromptGroup).toHaveBeenCalledWith({
       sourceDestination: 'us',
       sourceProjectId: 'project-1',
@@ -220,7 +244,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 1, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 1, skipped: 0, complete: true },
+    });
     expect(deps.grantPublicViewer).not.toHaveBeenCalled();
   });
 
@@ -249,7 +276,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 1 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 1, complete: true },
+    });
     expect(deps.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('validation'),
       'a',
@@ -289,7 +319,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 0, skipped: 1 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 0, skipped: 1, complete: true },
+    });
     expect(deps.logger.warn).toHaveBeenCalledWith(expect.stringContaining('chat-1'));
     expect(deps.findPromptGroup).not.toHaveBeenCalled();
   });
@@ -303,7 +336,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(deps.findPromptGroup).toHaveBeenCalledTimes(1);
   });
 
@@ -327,7 +363,10 @@ describe('syncLangfusePromptCatalog', () => {
 
     const result = await syncLangfusePromptCatalog(source, deps);
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(deps.logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Could not release'),
       expect.any(Error),

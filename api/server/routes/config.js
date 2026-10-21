@@ -33,8 +33,8 @@ const {
   defaultSocialLogins,
   resolveMCPAppsPolicy,
 } = require('librechat-data-provider');
-const { logger, SystemCapabilities } = require('@librechat/data-schemas');
-const { hasCapability, hasConfigCapability } = require('~/server/middleware/roles/capabilities');
+const { logger, SystemCapabilities, configCapability } = require('@librechat/data-schemas');
+const { hasCapability, getHeldCapabilities } = require('~/server/middleware/roles/capabilities');
 const { getLdapConfig } = require('~/server/services/Config/ldap');
 const { getRumConfig } = require('~/server/services/Config/rum');
 const { getAppConfig } = require('~/server/services/Config/app');
@@ -277,6 +277,11 @@ router.get('/', async function (req, res) {
     const langfuseFanoutEnabled = isLangfuseFanoutEnabled();
     const langfuseConnectionAvailable = isLangfuseConnectionAvailable();
     let langfuseConnectionAccess = false;
+    // Gates only the prompt-sync "Run" action within the connection tab: the server route
+    // for it (`POST /api/admin/langfuse/prompts/sync`) requires `manage:prompts` in addition
+    // to the `langfuse` config capability above, so an admin can have connection access
+    // without this.
+    let langfusePromptManageAccess = false;
 
     if (langfuseConnectionAvailable) {
       try {
@@ -288,13 +293,18 @@ router.get('/', async function (req, res) {
             tenantId: req.user.tenantId,
             idOnTheSource: req.user.idOnTheSource ?? null,
           };
-          const hasAdminAccess = await hasCapability(
-            capabilityUser,
+          const held = await getHeldCapabilities(capabilityUser, [
             SystemCapabilities.ACCESS_ADMIN,
-          );
-          if (hasAdminAccess) {
-            langfuseConnectionAccess = await hasConfigCapability(capabilityUser, 'langfuse');
-          }
+            SystemCapabilities.MANAGE_CONFIGS,
+            configCapability('langfuse'),
+            SystemCapabilities.MANAGE_PROMPTS,
+          ]);
+          const hasAdminAccess = held.has(SystemCapabilities.ACCESS_ADMIN);
+          langfuseConnectionAccess =
+            hasAdminAccess &&
+            (held.has(SystemCapabilities.MANAGE_CONFIGS) || held.has(configCapability('langfuse')));
+          langfusePromptManageAccess =
+            langfuseConnectionAccess && held.has(SystemCapabilities.MANAGE_PROMPTS);
         }
       } catch (err) {
         logger.warn(`[config] Langfuse capability check failed: ${err.message}`);
@@ -330,6 +340,7 @@ router.get('/', async function (req, res) {
         : 0,
       langfuseFanoutEnabled,
       langfuseConnectionAccess,
+      langfusePromptManageAccess,
       insightsEnabled: isEnabled(process.env.ENABLE_INSIGHTS),
       /** Lets the client skip the pull request lookup entirely when the feature is off. */
       ...resolvePullRequestCapabilities(appConfig, process.env),

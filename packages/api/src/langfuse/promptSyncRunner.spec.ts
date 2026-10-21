@@ -56,7 +56,10 @@ describe('createLangfusePromptSyncRunner', () => {
 
     const result = await run(createRequest());
 
-    expect(result).toEqual({ ok: true, value: { created: 1, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 1, unchanged: 0, skipped: 0, complete: true },
+    });
     expect(deps.findLangfusePromptGroup).toHaveBeenCalledWith({
       sourceDestination: 'eu',
       sourceProjectId: 'project-1',
@@ -91,7 +94,10 @@ describe('createLangfusePromptSyncRunner', () => {
 
     const result = await run(createRequest());
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 1, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 1, skipped: 0, complete: true },
+    });
     expect(deps.createLangfusePromptGroup).not.toHaveBeenCalled();
     expect(deps.grantPermission).not.toHaveBeenCalled();
   });
@@ -105,7 +111,10 @@ describe('createLangfusePromptSyncRunner', () => {
 
     const result = await run(createRequest());
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 1, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 1, skipped: 0, complete: true },
+    });
     expect(deps.grantPermission).not.toHaveBeenCalled();
     expect(deps.logger.warn).not.toHaveBeenCalled();
   });
@@ -120,7 +129,10 @@ describe('createLangfusePromptSyncRunner', () => {
 
     const result = await run(createRequest());
 
-    expect(result).toEqual({ ok: true, value: { created: 0, unchanged: 0, skipped: 1 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 0, unchanged: 0, skipped: 1, complete: true },
+    });
     expect(deps.grantPermission).not.toHaveBeenCalled();
     expect(deps.logger.warn).toHaveBeenCalledTimes(1);
     expect(deps.logger.warn).toHaveBeenCalledWith(
@@ -180,7 +192,10 @@ describe('createLangfusePromptSyncRunner', () => {
 
     const result = await run(createRequest({ listPrompts, maxPages: 2 }));
 
-    expect(result).toEqual({ ok: true, value: { created: 2, unchanged: 0, skipped: 0 } });
+    expect(result).toEqual({
+      ok: true,
+      value: { created: 2, unchanged: 0, skipped: 0, complete: false },
+    });
     expect(listPrompts).toHaveBeenCalledTimes(2);
     expect(listPrompts).toHaveBeenNthCalledWith(1, { type: 'text', limit: 100, page: 1 });
     expect(listPrompts).toHaveBeenNthCalledWith(2, { type: 'text', limit: 100, page: 2 });
