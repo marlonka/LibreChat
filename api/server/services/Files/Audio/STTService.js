@@ -11,6 +11,7 @@ const {
   getSafeErrorMetadata,
   applyAxiosProxyConfig,
   resolveConfigSecret,
+  transcribeWithGoogle,
   applySSRFSafeAgentIfDirect,
   contentFilterBlockResponse,
   contentFilterUninspectableResponse,
@@ -297,6 +298,15 @@ class STTService {
    * @throws {Error} If the provider is invalid, the response status is not 200, or the response data is missing.
    */
   async sttRequest(provider, sttSchema, { audioBuffer, audioFile, language }, allowedAddresses) {
+    if (provider === STTProviders.GOOGLE) {
+      return transcribeWithGoogle({
+        config: sttSchema,
+        audio: audioBuffer,
+        mimeType: audioFile.mimetype,
+        language,
+      });
+    }
+
     const strategy = this.providerStrategies[provider];
     if (!strategy) {
       throw new Error('Invalid provider');
