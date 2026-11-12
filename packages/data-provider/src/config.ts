@@ -3183,10 +3183,7 @@ export const traceViewerDefaults = {
 } as const;
 
 type TraceViewerLimitField =
-  | 'maxRecords'
-  | 'maxContentLength'
-  | 'requestsPerMinute'
-  | 'requestTimeoutMs';
+  'maxRecords' | 'maxContentLength' | 'requestsPerMinute' | 'requestTimeoutMs';
 
 /** Inclusive bounds for the numeric `interface.traceViewer` fields. */
 export const traceViewerLimits: Readonly<
@@ -6395,7 +6392,7 @@ export type TSpecialVarLabel = `com_ui_special_var_${keyof typeof specialVariabl
  * Does not infer or default any endpoint type when absent.
  */
 export function getEndpointField<
-  K extends TConfig[keyof TConfig] extends never ? never : keyof TConfig,
+  K extends (TConfig[keyof TConfig] extends never ? never : keyof TConfig),
 >(
   endpointsConfig: TEndpointsConfig | undefined | null,
   endpoint: EModelEndpoint | string | null | undefined,

@@ -2622,8 +2622,7 @@ describe('Azure OpenAI group keys — real handlers against a real Config collec
     ]);
     expect(kept.statusCode).toBe(200);
     const after = getAtPath(await readRawOverrides(principalId), 'endpoints.azureOpenAI.groups') as
-      | Array<Record<string, string>>
-      | undefined;
+      Array<Record<string, string>> | undefined;
     expect(after![0].apiKey).toBe(stored![0].apiKey);
   });
 

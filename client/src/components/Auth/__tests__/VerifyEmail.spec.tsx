@@ -40,6 +40,7 @@ const idleMutationState = () => ({
   isError: false as const,
   isIdle: true as const,
   isLoading: false as const,
+  isPending: false as const,
   isPaused: false,
   isSuccess: false as const,
   status: 'idle' as const,

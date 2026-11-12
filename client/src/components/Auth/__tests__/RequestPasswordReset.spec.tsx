@@ -30,8 +30,8 @@ function setup(emailEnabled: boolean | null = true, isLoading = false) {
     failureReason: null,
     isError: false,
     ...(isLoading
-      ? { isIdle: false, isLoading: true, status: 'loading' as const }
-      : { isIdle: true, isLoading: false, status: 'idle' as const }),
+      ? { isIdle: false, isLoading: true, isPending: true, status: 'loading' as const }
+      : { isIdle: true, isLoading: false, isPending: false, status: 'idle' as const }),
     isPaused: false,
     isSuccess: false,
     variables: undefined,
