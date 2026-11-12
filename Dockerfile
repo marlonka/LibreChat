@@ -33,7 +33,9 @@ COPY --chown=node:node packages/data-provider/package.json ./packages/data-provi
 COPY --chown=node:node packages/data-schemas/package.json ./packages/data-schemas/package.json
 COPY --chown=node:node packages/api/package.json ./packages/api/package.json
 COPY --chown=node:node vendor/code ./vendor/code
+COPY --chown=node:node packages/client/package.json ./packages/client/package.json
 COPY --chown=node:node packages/chat/package.json ./packages/chat/package.json
+COPY --chown=node:node packages/channel-gateway/package.json ./packages/channel-gateway/package.json
 
 RUN \
     # Allow mounting of these files, which have no default
@@ -62,7 +64,7 @@ ARG VITE_MCP_SANDBOX_URL=
 RUN \
     # React client build with configurable memory
     NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" npm run frontend && \
-    npm prune --omit=dev --no-audit --no-fund && \
+    npm prune --omit=dev --offline --no-audit --no-fund && \
     npm cache clean --force
 
 # Optional build metadata surfaced in Settings -> About for support triage.

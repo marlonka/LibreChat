@@ -205,7 +205,7 @@ async function getJwksClient(
 
 function getVerifyOptions(oidcConfig: OidcAccessTokenConfig): VerifyOptions {
   const normalizedIssuer = normalizeOpenIdIssuer(oidcConfig.issuer);
-  const issuer =
+  const issuer: VerifyOptions['issuer'] =
     normalizedIssuer && normalizedIssuer !== oidcConfig.issuer
       ? [oidcConfig.issuer, normalizedIssuer]
       : oidcConfig.issuer;
