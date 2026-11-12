@@ -4,6 +4,10 @@ const esModules = [
   '@librechat/agents',
   'openid-client',
   'oauth4webapi',
+  'agent-base',
+  'http-proxy-agent',
+  'https-proxy-agent',
+  'proxy-agent-negotiate',
   'jose',
   '@langchain/langgraph',
   '@langchain/langgraph-checkpoint',
@@ -46,5 +50,6 @@ module.exports = {
       },
     ],
   },
-  transformIgnorePatterns: [`/node_modules/(?!(${esModules})/).*/`],
+  // Use the innermost dependency path for nested ESM packages.
+  transformIgnorePatterns: [`/node_modules/(?!.*?/node_modules/)(?!(${esModules})/).*/`],
 };

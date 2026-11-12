@@ -26,7 +26,7 @@ realPostgres('delete-user CLI durable erasure recovery', () => {
   let db;
   const source = fs
     .readFileSync(path.resolve(__dirname, '../delete-user.js'), 'utf8')
-    .replace(/^#!.*\n/, '');
+    .replace(/^#![^\r\n]*\r?\n/, '');
   const execute = vm.runInThisContext(
     `(function(require, __dirname, process, console, Date) { ${source}\n})`,
     { filename: 'delete-user-recovery-cli.js' },
