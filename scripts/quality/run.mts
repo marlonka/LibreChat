@@ -3,18 +3,12 @@ import { createRequire } from 'node:module';
 import { resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { Stryker } from '@stryker-mutator/core';
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 import { mutationSelection, riskMarkdown, riskReport } from './risk.mts';
 import { changes, git, WORKSPACES, workspaceFor } from './changes.mts';
-import { coverageArgs } from './jest.mts';
+import { runCoverage } from './jest.mts';
+import { assertMutants, mutantKey, mutationPatterns, planShards } from './shards.mts';
 
 const { values } = parseArgs({
   options: {
@@ -22,6 +16,8 @@ const { values } = parseArgs({
     head: { type: 'string', default: 'HEAD' },
     workspace: { type: 'string' },
     check: { type: 'string' },
+    shard: { type: 'string' },
+    static: { type: 'string', default: 'off' },
   },
 });
 const workspace = WORKSPACES.find(({ name }) => name === values.workspace);
@@ -30,12 +26,28 @@ if (!workspace || !['risk', 'mutation'].includes(values.check ?? '')) {
     'Usage: node scripts/quality/run.mts --base ref --workspace name --check risk|mutation',
   );
 }
+if (!['on', 'off'].includes(values.static)) throw new Error('--static must be on or off');
+const staticMutants = values.static === 'on';
+const staticDescription = staticMutants
+  ? 'Static mutations are included.'
+  : 'Static-only mutations are ignored and excluded from the score. Hybrid mutations use per-test coverage.';
 const selection = changes(values.base, values.head);
 if (selection.head !== git(['rev-parse', 'HEAD']).trim()) {
   throw new Error('Check out the selected head before measuring its source');
 }
 const files = selection.files.filter(({ file }) => workspaceFor(file)?.name === workspace.name);
-const output = resolve('coverage/changes', workspace.name, values.check!);
+const shardIndex = values.shard === undefined ? undefined : Number(values.shard);
+if (
+  shardIndex !== undefined &&
+  (values.check !== 'mutation' || !Number.isInteger(shardIndex) || shardIndex < 1 || shardIndex > 4)
+) {
+  throw new Error('--shard requires a mutation check and an index from 1 to 4');
+}
+const output = resolve(
+  'coverage/changes',
+  workspace.name,
+  shardIndex === undefined ? values.check! : `mutation-${shardIndex}`,
+);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 writeFileSync(`${output}/selection.json`, JSON.stringify({ ...selection, files }, null, 2));
@@ -44,7 +56,7 @@ const summary = (markdown: string) => {
   writeFileSync(`${output}/summary.md`, markdown);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
 };
-if (!files.length) {
+if (!files.length && shardIndex === undefined) {
   summary(`## ${workspace.name}: ${values.check}\n\nNo changed source files.\n`);
   process.exit(0);
 }
@@ -78,25 +90,24 @@ if (values.check === 'risk') {
     throw new Error('Invalid Jest test selection');
   }
   writeFileSync(`${output}/selected-tests.json`, JSON.stringify(tests, null, 2));
-  const result = tests.length
-    ? spawnSync(
-        process.execPath,
-        [jestBin, ...coverageArgs(workspace.config, localFiles, output, tests)],
-        { cwd: workspace.path, stdio: 'inherit', env },
-      )
-    : { error: undefined, status: 0, signal: null };
-  if (result.error || result.status !== 0) {
+  try {
+    runCoverage({
+      workspace: workspace.name,
+      config: workspace.config,
+      cwd: workspace.path,
+      jestBin,
+      files: localFiles,
+      tests,
+      output,
+      env,
+    });
+  } catch (error) {
     summary(
       `## ${workspace.name}: change risk\n\nCoverage failed. Scores are unavailable. See the test log.\n`,
     );
-    throw result.error ?? new Error(`Jest exited with ${result.status ?? result.signal}`);
+    throw error;
   }
   const coverageFile = `${output}/coverage-final.json`;
-  if (!existsSync(coverageFile)) {
-    // Jest produces no coverage file when no test matches. Keep the lack of evidence explicit.
-    if (tests.length !== 0) throw new Error('Jest did not produce coverage');
-    writeFileSync(coverageFile, '{}');
-  }
   const report = riskReport(coverageFile, files, selection.base);
   writeFileSync(
     `${output}/risk.json`,
@@ -106,10 +117,49 @@ if (values.check === 'risk') {
 } else {
   process.env.NODE_ENV = env.NODE_ENV;
   process.env.BABEL_ENV = env.BABEL_ENV;
-  const targets = mutationSelection(files, selection.base);
+  console.log(`Mutation run: static=${values.static}. ${staticDescription}`);
+  const allTargets = mutationSelection(files, selection.base);
+  const plan =
+    shardIndex === undefined
+      ? undefined
+      : await planShards(
+          allTargets,
+          selection.base,
+          selection.head,
+          workspace.name,
+          4,
+          staticMutants,
+        );
+  const shard = plan?.shards.find(({ index }) => index === shardIndex);
+  const targets = shard?.targets ?? allTargets;
+  if (plan && shard) {
+    writeFileSync(`${output}/plan.json`, JSON.stringify(plan, null, 2));
+    console.log(
+      `Mutation shard ${shard.index}/${plan.shards.length}: ${shard.expected.length} planned mutants; two workers; static=${values.static}`,
+    );
+  }
   writeFileSync(`${output}/functions.json`, JSON.stringify(targets, null, 2));
-  if (!targets.length) {
-    summary(`## ${workspace.name}: mutation testing\n\nNo added or edited functions.\n`);
+  const completeShard = () => {
+    if (plan && shard)
+      writeFileSync(
+        `${output}/completion.json`,
+        JSON.stringify(
+          {
+            digest: plan.digest,
+            index: shard.index,
+            complete: true,
+            total: shard.expected.length,
+          },
+          null,
+          2,
+        ),
+      );
+  };
+  if (!targets.length || shard?.expected.length === 0) {
+    completeShard();
+    summary(
+      `## ${workspace.name}: mutation testing\n\nNo mutations selected for this run. Static=${values.static}.\n`,
+    );
     process.exit(0);
   }
   const started = Date.now();
@@ -136,8 +186,8 @@ if (values.check === 'risk') {
           : {}),
       },
     },
-    mutate: targets.flatMap(({ mutate }) => mutate),
-    ignoreStatic: false,
+    mutate: mutationPatterns(targets),
+    ignoreStatic: !staticMutants,
     coverageAnalysis: 'perTest',
     concurrency: 2,
     incremental: false,
@@ -164,6 +214,13 @@ if (values.check === 'risk') {
   });
   try {
     const results = await stryker.runMutationTest();
+    if (shard)
+      assertMutants(
+        shard.expected,
+        results.map((mutant) =>
+          mutantKey(relative(process.cwd(), mutant.fileName).replaceAll('\\', '/'), mutant),
+        ),
+      );
     const progress = JSON.parse(readFileSync(`${output}/progress.json`, 'utf8'));
     if (!progress.complete || progress.completed !== results.length) {
       throw new Error('Mutation progress report is incomplete');
@@ -178,9 +235,9 @@ if (values.check === 'risk') {
       [
         `## ${workspace.name}: mutation testing (advisory)`,
         '',
-        `Changed functions: ${targets.reduce((total, target) => total + target.functions.length, 0)} in ${targets.length} files. Static mutations are included. Duration: ${((Date.now() - started) / 60000).toFixed(1)} minutes.`,
+        `Changed functions: ${targets.reduce((total, target) => total + target.functions.length, 0)} in ${targets.length} files. Static=${values.static}. ${staticDescription} Duration: ${((Date.now() - started) / 60000).toFixed(1)} minutes.`,
         '',
-        `Mutation score: ${score}. Surviving and uncovered mutants reduce this score. Invalid mutants are excluded.`,
+        `Mutation score: ${score}. Surviving and uncovered mutants reduce this score. Ignored and invalid mutants are excluded.`,
         ...(runtimeErrors
           ? [
               `${runtimeErrors} mutations had runtime errors. The check fails because their results are incomplete.`,
@@ -196,6 +253,7 @@ if (values.check === 'risk') {
       ].join('\n'),
     );
     if (runtimeErrors) process.exitCode = 1;
+    else completeShard();
   } catch (error) {
     summary(
       `## ${workspace.name}: mutation testing\n\nStryker failed. This is not a mutation score. See the test log.\n`,
