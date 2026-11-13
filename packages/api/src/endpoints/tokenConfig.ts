@@ -7,6 +7,8 @@ import type { EndpointTokenConfig, ServerRequest } from '~/types';
 import type { RequestModelsConfigResult } from './config/service';
 import type { TokenomicsDeps } from '~/endpoints/pricing';
 import { getTokenConfigKey } from '~/endpoints/custom/initialize';
+import { getGoogleTokenConfig } from '~/endpoints/google/pricing';
+import { getGoogleVertexLocation } from '~/endpoints/google/llm';
 import { buildTokenConfigMap } from '~/endpoints/pricing';
 import { getSafeErrorMetadata } from '~/utils/errors';
 import { tokenConfigCache } from '~/cache';
@@ -34,6 +36,20 @@ export async function resolveTokenConfigMap(
   const customEndpoints = (appConfig?.endpoints?.[EModelEndpoint.custom] ?? []) as TEndpoint[];
   const cache = tokenConfigCache();
   const endpointTokenConfigs: Record<string, EndpointTokenConfig | undefined> = {};
+
+  if (includePricing) {
+    const google: EndpointTokenConfig = {};
+    const configured = appConfig?.endpoints?.[EModelEndpoint.google]?.tokenConfig;
+    const hasGoogleKey = Boolean(process.env.GOOGLE_KEY?.trim());
+    for (const model of modelsConfig[EModelEndpoint.google] ?? []) {
+      const location = hasGoogleKey ? undefined : getGoogleVertexLocation(model);
+      const rates = getGoogleTokenConfig(model, location, configured);
+      if (rates) {
+        google[model] = rates;
+      }
+    }
+    endpointTokenConfigs[EModelEndpoint.google] = google;
+  }
 
   for (const endpointConfig of customEndpoints) {
     /** Models config and the token-config cache key by the normalized name */

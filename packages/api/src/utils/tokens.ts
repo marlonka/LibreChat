@@ -1,5 +1,10 @@
 import z from 'zod';
-import { EModelEndpoint, supportsContext1m, gptPointReleaseFamily } from 'librechat-data-provider';
+import {
+  EModelEndpoint,
+  supportsContext1m,
+  gptPointReleaseFamily,
+  GEMINI_4_CONTEXT_TOKENS,
+} from 'librechat-data-provider';
 import type { EndpointTokenConfig, TokenConfig } from '~/types';
 
 /**
@@ -151,6 +156,8 @@ const googleModels = {
   'gemini-3.8-flash': 1048576,
   /** Shared across input, thinking and output; output is still capped by `maxOutputTokens`. */
   'gemini-4-argon': 1048576,
+  'gemini-4-carbon': GEMINI_4_CONTEXT_TOKENS,
+  'gemini-4-hydrogen': GEMINI_4_CONTEXT_TOKENS,
 };
 
 const anthropicModels = {

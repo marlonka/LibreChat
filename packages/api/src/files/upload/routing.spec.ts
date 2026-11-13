@@ -123,6 +123,39 @@ describe('resolveEffectiveToolResource Responses handling', () => {
   });
 });
 
+describe('Gemini 4 agent document routing', () => {
+  it('uses the saved model for message uploads and reuses the authorized agent read', async () => {
+    const req = Object.assign({} as ServerRequest, {
+      file: { mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    });
+    const getAgent = jest.fn().mockResolvedValue({
+      provider: Providers.VERTEXAI,
+      model: 'gemini-4-carbon',
+    });
+    const metadata = {
+      endpoint: EModelEndpoint.agents,
+      agent_id: 'agent_saved01',
+      model: 'gemini-4-argon',
+      message_file: 'true',
+    };
+
+    await expect(resolveUploadEndpoint({ req, metadata, getAgent })).resolves.toBe(
+      Providers.VERTEXAI,
+    );
+    await expect(
+      resolveEffectiveToolResource({ req, metadata, getAgent }),
+    ).resolves.toBeUndefined();
+    await expect(
+      resolveEffectiveToolResource({
+        req,
+        metadata: { ...metadata, message_file: undefined },
+        getAgent,
+      }),
+    ).resolves.toBe(EToolResources.context);
+    expect(getAgent).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('direct provider audio preflight', () => {
   const makeReq = (legacyFileUploadUX = false, mimetype = 'audio/wma', originalname = 'clip.wma') =>
     Object.assign({} as ServerRequest, {

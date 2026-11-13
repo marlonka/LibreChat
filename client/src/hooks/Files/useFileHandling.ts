@@ -11,6 +11,7 @@ import {
   EToolResources,
   FileSources,
   mergeFileConfig,
+  getGemini4Model,
   isAssistantsEndpoint,
   isEphemeralAgentId,
   getEndpointFileConfig,
@@ -634,6 +635,13 @@ const useFileHandlingCore = (params: UseFileHandling | undefined, fileState: Fil
     if (!isAssistantsEndpoint(endpointType ?? endpoint)) {
       if (!agent_id) {
         formData.append('message_file', 'true');
+        if (
+          conversation?.model &&
+          getGemini4Model(conversation.model) &&
+          formData.get('model') == null
+        ) {
+          formData.append('model', conversation.model);
+        }
       }
       const tool_resource = extendedFile.tool_resource;
       if (tool_resource != null) {

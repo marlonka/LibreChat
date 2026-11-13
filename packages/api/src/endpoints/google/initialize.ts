@@ -15,6 +15,7 @@ import {
   resolveHeaders,
 } from '~/utils';
 import { resolveEndpointRuntime } from '~/types';
+import { getGoogleTokenConfig } from './pricing';
 import { getGoogleConfig } from './llm';
 
 /**
@@ -133,5 +134,20 @@ export async function initializeGoogle(
     result.llmConfig._lc_stream_delay = clientOptions.streamRate;
   }
 
-  return result;
+  const { model, location } = result.llmConfig as { model?: string; location?: string };
+  if (!model) {
+    return result;
+  }
+  const rates = getGoogleTokenConfig(
+    model,
+    result.provider === Providers.VERTEXAI ? location : undefined,
+    googleConfig?.tokenConfig,
+  );
+  if (!rates) {
+    return result;
+  }
+  // The Developer API SDK strips the models/ prefix from its reported model id.
+  const reportedModel =
+    result.provider === Providers.GOOGLE ? model.replace(/^models\//, '') : model;
+  return { ...result, endpointTokenConfig: { [model]: rates, [reportedModel]: rates } };
 }

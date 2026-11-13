@@ -2,8 +2,12 @@ jest.mock('@librechat/data-schemas', () => ({
   logger: { error: jest.fn(), debug: jest.fn(), info: jest.fn() },
 }));
 jest.mock('@librechat/api', () => {
-  const { getModelRefusalInfo, getModelEndUsage, captureResponseAccountingUsage } =
-    jest.requireActual('@librechat/api');
+  const {
+    getModelRefusalInfo,
+    getModelEndUsage,
+    captureResponseAccountingUsage,
+    collectGoogleThoughtSignatures,
+  } = jest.requireActual('@librechat/api');
   return {
     sendEvent: jest.fn(),
     emitEvent: jest.fn(),
@@ -12,6 +16,7 @@ jest.mock('@librechat/api', () => {
     getModelRefusalInfo,
     getModelEndUsage,
     captureResponseAccountingUsage,
+    collectGoogleThoughtSignatures,
   };
 });
 jest.mock('~/server/services/Files/Citations', () => ({
@@ -161,6 +166,25 @@ describe('ModelEndHandler — Vertex thoughtSignature capture (issue #13006 foll
       tc_step1: 'SIG_step1',
       tc_step2: 'SIG_step2',
     });
+  });
+
+  it('captures Developer API signatures by call id even without usage metadata', async () => {
+    const signatures = {};
+    const handler = new ModelEndHandler([], signatures);
+
+    await handler.handle(
+      'on_chat_model_end',
+      {
+        output: {
+          tool_calls: [{ id: 'first' }, { id: 'sibling' }],
+          additional_kwargs: { __gemini_function_call_thought_signatures__: { first: 'signed' } },
+        },
+      },
+      { ls_model_name: 'gemini-4-hydrogen' },
+      buildGraph(),
+    );
+
+    expect(signatures).toEqual({ first: 'signed' });
   });
 
   it('is a no-op for signatures when collectedThoughtSignatures is null', async () => {

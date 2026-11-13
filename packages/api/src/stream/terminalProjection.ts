@@ -149,6 +149,12 @@ function projectMessage<T>(message: T): T {
     }
   }
 
+  if (isRecord(message.metadata) && 'thoughtSignatures' in message.metadata) {
+    const { thoughtSignatures: _, ...metadata } = message.metadata;
+    projected ??= { ...message };
+    projected.metadata = metadata;
+  }
+
   for (const [collection, excluded] of FILE_COLLECTIONS) {
     const current = (projected ?? message)[collection];
     const next = projectFileCollection(current, excluded);

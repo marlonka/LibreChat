@@ -13,6 +13,7 @@ import {
 import { userSubmittedMessageFieldPathSchema } from './filters';
 import { TFeedback, feedbackSchema } from './feedback';
 import { CODE_APPROVAL_MODES } from './code/approval';
+import { getGemini4Model } from './gemini';
 import { Tools } from './types/tools';
 
 export const isUUID = z.guid();
@@ -326,6 +327,7 @@ export enum ThinkingLevel {
   low = 'low',
   medium = 'medium',
   high = 'high',
+  xhigh = 'xhigh',
 }
 
 /** OpenAI Responses API `reasoning.mode` (GPT-5.6+). */
@@ -544,6 +546,10 @@ const GOOGLE_LEGACY_MAX_OUTPUT = 8192 as const;
  * (2.0 and earlier, including legacy image models) and Gemma retain the 8K limit.
  */
 const getGoogleMaxOutputTokens = (modelName: string): number => {
+  const gemini4 = getGemini4Model(modelName);
+  if (gemini4) {
+    return gemini4.maxOutputTokens;
+  }
   if (/gemini-(?:2\.5|[3-9]|\d{2,})/i.test(modelName)) {
     if (/image/i.test(modelName)) {
       return GOOGLE_IMAGE_MAX_OUTPUT;

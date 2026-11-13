@@ -11,6 +11,7 @@ export * from './crypto';
 export * from './schema';
 export * from './utils';
 export { createModels } from './models';
+export { getGemini4StandardRates } from './methods/tx';
 export { createSlackWorkspaceStorage } from './methods/slackWorkspace';
 export { createSlackRouteStorage } from './methods/slackRoute';
 export { createSlackDispatchStorage } from './methods/slackDispatch';

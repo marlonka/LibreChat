@@ -34,6 +34,7 @@ import {
 } from './schemas';
 import { resolveEffectiveUseResponsesApi } from './file-config';
 import { clampSettingRange } from './generate';
+import { getGemini4Model } from './gemini';
 import { gpt6Tier } from './families';
 
 // Base definitions
@@ -826,6 +827,7 @@ const google: Record<string, SettingDefinition> = {
       [ThinkingLevel.low]: 'com_ui_low',
       [ThinkingLevel.medium]: 'com_ui_medium',
       [ThinkingLevel.high]: 'com_ui_high',
+      [ThinkingLevel.xhigh]: 'com_ui_xhigh',
     },
     optionType: 'conversation',
     columnSpan: 4,
@@ -1842,11 +1844,40 @@ function applyModelFamilyDefaults(
       (setting) => !['thinkingBudget', 'temperature', 'topP', 'topK'].includes(setting.key),
     );
   }
+  const gemini4 = endpoint === EModelEndpoint.google ? getGemini4Model(model) : undefined;
   const modelAwareSettings =
     endpoint === EModelEndpoint.google
-      ? settings.map((setting) => {
+      ? settings.flatMap((setting) => {
+          if (
+            gemini4 &&
+            (setting.key === 'temperature' ||
+              setting.key === 'topP' ||
+              setting.key === 'topK' ||
+              setting.key === 'thinkingBudget')
+          ) {
+            return [];
+          }
+          if (gemini4 && setting.key === 'thinkingLevel') {
+            const options = setting.options?.filter(
+              (level) => level !== ThinkingLevel.minimal && level !== ThinkingLevel.xhigh,
+            );
+            if (options && gemini4.supportsXHigh) {
+              options.push(ThinkingLevel.xhigh);
+            }
+            return [{ ...setting, options }];
+          }
           if (setting.key === 'maxOutputTokens') {
-            return { ...setting, default: googleSettings.maxOutputTokens.reset(model) };
+            const max = googleSettings.maxOutputTokens.reset(model);
+            return [
+              {
+                ...setting,
+                default: max,
+                ...(gemini4 &&
+                  setting.range && {
+                    range: { ...setting.range, max, modelSpecific: true },
+                  }),
+              },
+            ];
           }
           /** The shared thinking budget range is model-agnostic, so it caps Pro below
            *  its real ceiling and accepts Flash values the provider rejects. The
@@ -1855,18 +1886,20 @@ function applyModelFamilyDefaults(
           if (setting.key === 'thinkingBudget' && setting.range != null) {
             const bounds = getGoogleThinkingBudgetBounds(model);
             if (bounds != null) {
-              return {
-                ...setting,
-                range: {
-                  ...setting.range,
-                  max: bounds.max,
-                  positiveMin: bounds.min,
-                  modelSpecific: true,
+              return [
+                {
+                  ...setting,
+                  range: {
+                    ...setting.range,
+                    max: bounds.max,
+                    positiveMin: bounds.min,
+                    modelSpecific: true,
+                  },
                 },
-              };
+              ];
             }
           }
-          return setting;
+          return [setting];
         })
       : settings;
 

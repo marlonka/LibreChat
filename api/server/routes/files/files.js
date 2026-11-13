@@ -840,6 +840,7 @@ const handleFileUpload = async (req, res) => {
      * consume the file and does not try. */
     const uploadAgent = await resolveUploadAgent(req, metadata.agent_id);
     metadata.agentTools = uploadAgent?.tools;
+    metadata.agentModel = uploadAgent?.model;
     metadata.useResponsesApi ??= uploadAgent?.model_parameters?.useResponsesApi;
     filterFile({ req, endpoint: effectiveEndpoint });
 

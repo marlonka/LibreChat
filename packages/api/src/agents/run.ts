@@ -136,6 +136,7 @@ import { buildEffectiveToolApprovalPolicy } from '~/agents/hitl/allow';
 import { prepareQueuedCodeFileContext } from '~/files/code/queued';
 import { getBuiltInBaseURL } from '~/endpoints/openai/initialize';
 import { getProviderConfig } from '~/endpoints/config/providers';
+import { applyGemini4OutputLimit } from '~/endpoints/google/llm';
 import { createSafeUser, createSafeAgent } from '~/utils/env';
 import { shareDeferredDefinitions } from '~/agents/deferral';
 import { buildToolApprovalHooks } from '~/agents/hitl/hooks';
@@ -2643,6 +2644,9 @@ export async function createRun({
       ) as t.RunLLMConfig,
       modelCallbacks,
     );
+    if (provider === Providers.GOOGLE || provider === Providers.VERTEXAI) {
+      applyGemini4OutputLimit(llmConfig, llmConfig.streaming);
+    }
 
     const joinInstructionMap = (map?: Record<string, unknown>) =>
       Object.values(map ?? {})

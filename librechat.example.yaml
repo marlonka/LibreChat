@@ -1172,6 +1172,10 @@ endpoints:
   # google:
   #   headers:
   #     cf-aig-metadata: '{"user_email":"{{LIBRECHAT_USER_EMAIL}}","app":"librechat"}'
+  #   # Optional Gemini 4 rates in USD per million tokens for your billing plan.
+  #   # When omitted, LibreChat estimates the native API's online Standard rates.
+  #   tokenConfig:
+  #     gemini-4-hydrogen: { prompt: 1.5, completion: 7.5, cacheRead: 0.075 }
 
   # Anthropic endpoint configuration with Vertex AI support
   # Use this to run Anthropic Claude models through Google Cloud Vertex AI
