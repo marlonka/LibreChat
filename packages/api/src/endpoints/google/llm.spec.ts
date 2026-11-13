@@ -2,7 +2,12 @@ import { Providers } from '@librechat/agents';
 import { AuthKeys, ThinkingLevel } from 'librechat-data-provider';
 import type { GoogleClientOptions } from '@librechat/agents';
 import type * as t from '~/types';
-import { getGoogleConfig, getSafetySettings, knownGoogleParams } from './llm';
+import {
+  applyGemini4OutputLimit,
+  getGoogleConfig,
+  getSafetySettings,
+  knownGoogleParams,
+} from './llm';
 
 describe('getGoogleConfig', () => {
   const originalEnv = process.env;
@@ -16,6 +21,74 @@ describe('getGoogleConfig', () => {
 
   afterAll(() => {
     process.env = originalEnv;
+  });
+
+  describe.each([
+    ['Developer API', { [AuthKeys.GOOGLE_API_KEY]: 'test-api-key' }, Providers.GOOGLE],
+    [
+      'Vertex AI',
+      { [AuthKeys.GOOGLE_SERVICE_KEY]: { project_id: 'test-project' } },
+      Providers.VERTEXAI,
+    ],
+  ] as const)('Gemini 4 native requests through %s', (_name, credentials, provider) => {
+    it.each([
+      ['gemini-4-carbon', ThinkingLevel.unset, 'MEDIUM'],
+      ['gemini-4-carbon', ThinkingLevel.minimal, 'LOW'],
+      ['gemini-4-carbon', ThinkingLevel.xhigh, 'HIGH'],
+      ['gemini-4-hydrogen', ThinkingLevel.unset, 'HIGH'],
+      ['gemini-4-hydrogen', ThinkingLevel.xhigh, 'XHIGH'],
+    ])('normalizes %s thinking level %s to %s', (model, thinkingLevel, expected) => {
+      const result = getGoogleConfig(credentials, {
+        modelOptions: {
+          model,
+          thinkingLevel,
+          thinkingBudget: 4096,
+          temperature: 0.3,
+          topP: 0.5,
+          topK: 12,
+        },
+        addParams: { maxOutputTokens: 100_000, maxReasoningTokens: 4096, topP: 0.2 },
+      });
+
+      expect(result.provider).toBe(provider);
+      expect(result.llmConfig).toMatchObject({
+        model,
+        maxOutputTokens: 65_536,
+        thinkingConfig: { includeThoughts: true, thinkingLevel: expected },
+      });
+      for (const param of ['temperature', 'topP', 'topK', 'thinkingBudget', 'maxReasoningTokens']) {
+        expect(result.llmConfig).not.toHaveProperty(param);
+      }
+      expect(result.llmConfig).not.toHaveProperty('thinkingConfig.thinkingBudget');
+    });
+
+    it.each([
+      ['gemini-4-carbon', 32_768],
+      ['gemini-4-hydrogen', 65_536],
+    ])('caps non-streaming %s at %i tokens', (model, limit) => {
+      expect(
+        getGoogleConfig(credentials, { modelOptions: { model }, streaming: false }).llmConfig,
+      ).toMatchObject({ disableStreaming: true, maxOutputTokens: limit });
+    });
+  });
+
+  it.each([
+    ['gemini-4-carbon', 'europe-west1', 'eu', 'aiplatform.eu.rep.googleapis.com'],
+    ['gemini-4-hydrogen', 'us', 'us', 'aiplatform.us.rep.googleapis.com'],
+    ['gemini-4-hydrogen', 'global', 'global', 'aiplatform.googleapis.com'],
+  ])('routes %s from %s through %s', (model, configured, location, endpoint) => {
+    process.env.GOOGLE_LOC = configured;
+    const result = getGoogleConfig(
+      { [AuthKeys.GOOGLE_SERVICE_KEY]: { project_id: 'test-project' } },
+      { modelOptions: { model } },
+    );
+    expect(result.llmConfig).toMatchObject({ location, endpoint });
+  });
+
+  it('uses the Carbon ceiling when the final run config disables streaming', () => {
+    const config = { model: 'gemini-4-carbon', maxOutputTokens: 65_536, disableStreaming: true };
+    applyGemini4OutputLimit(config);
+    expect(config.maxOutputTokens).toBe(32_768);
   });
 
   describe('Basic Configuration', () => {

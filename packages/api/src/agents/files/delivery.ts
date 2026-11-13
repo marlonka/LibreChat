@@ -21,6 +21,7 @@ export type TurnDeliveryConfig = Pick<AppConfig, 'fileConfig' | 'speech' | 'endp
 /** The fields of an agent that route its attachments. */
 export interface TurnDeliveryAgent {
   provider: string;
+  model?: string;
   /** The endpoint name initialization records before it swaps `provider` for the backing
    *  client; an agent loaded without one is routed by its provider. */
   endpoint?: string | null;
@@ -50,6 +51,7 @@ export function resolveTurnDeliveryRouting({
     fileConfig,
     endpointConfig: getEndpointFileConfig({ fileConfig, endpoint }),
     endpoint,
+    model: agent.model,
     endpointProvider: getCustomEndpointProvider(config?.endpoints?.custom, endpoint),
     useResponsesApi: resolveUseResponsesApi(agent.model_parameters?.useResponsesApi),
     sttConfigured: isSpeechProviderConfigured(config?.speech?.stt),

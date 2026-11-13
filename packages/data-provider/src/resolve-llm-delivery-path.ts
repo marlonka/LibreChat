@@ -3,19 +3,21 @@ import type { EndpointFileConfig, FileConfig, RegexLike } from './types/files';
 import type { CodeEnvReferenceSet } from './codeEnvRef';
 import type { TEndpoint } from './config';
 import {
-  retrievalMimeTypes,
-  isExplicitMimeConfig,
-  isBedrockDocumentType,
-  codeInterpreterMimeTypes,
-  fileConfig as baseFileConfig,
-} from './file-config';
-import {
+  Providers,
   EModelEndpoint,
   isOpenAILikeProvider,
   isKnownProviderIdentifier,
   isMediaSupportedProvider,
   isDocumentSupportedProvider,
 } from './schemas';
+import {
+  retrievalMimeTypes,
+  isExplicitMimeConfig,
+  isBedrockDocumentType,
+  codeInterpreterMimeTypes,
+  fileConfig as baseFileConfig,
+} from './file-config';
+import { gemini4OfficeMimeTypes, getGemini4Model } from './gemini';
 import { normalizeEndpointName } from './utils';
 import { EToolResources } from './types/tools';
 import { getCodeEnvRefs } from './codeEnvRef';
@@ -155,6 +157,7 @@ export function resolveDefaultLLMDeliveryPath(
   useResponsesApi?: boolean,
   sttConfigured?: boolean,
   supportedMimeTypes?: RegexLike[],
+  model?: string,
 ): TDefaultLLMDeliveryPath {
   const wildcard = mimeType.split('/')[0] + '/*';
 
@@ -182,6 +185,14 @@ export function resolveDefaultLLMDeliveryPath(
 
   if (globalConfig?.fallback) {
     return globalConfig.fallback;
+  }
+
+  if (
+    (endpoint === EModelEndpoint.google || endpoint === Providers.VERTEXAI) &&
+    getGemini4Model(model) &&
+    gemini4OfficeMimeTypes.some((type) => type.test(mimeType))
+  ) {
+    return 'provider';
   }
 
   const systemDefault = (SYSTEM_LLM_DELIVERY_DEFAULTS.overrides[mimeType] ??
@@ -255,6 +266,7 @@ export function resolveDefaultLLMDeliveryPath(
  */
 export function resolveDefaultUploadLLMDeliveryPath({
   mimeType,
+  model,
   endpointConfig,
   fileConfig,
   endpoint,
@@ -263,6 +275,7 @@ export function resolveDefaultUploadLLMDeliveryPath({
   sttConfigured,
 }: {
   mimeType: string;
+  model?: string;
   endpointConfig?: EndpointFileConfig;
   fileConfig?: FileConfig;
   endpoint?: string;
@@ -287,6 +300,7 @@ export function resolveDefaultUploadLLMDeliveryPath({
     useResponsesApi,
     sttConfigured,
     runsAsOpenAI ? endpointConfig?.supportedMimeTypes : undefined,
+    model,
   );
 }
 
@@ -294,6 +308,7 @@ export function resolveDefaultUploadLLMDeliveryPath({
 export function resolveUploadLLMDeliveryPath({
   toolResource,
   mimeType,
+  model,
   endpointConfig,
   fileConfig,
   endpoint,
@@ -303,6 +318,7 @@ export function resolveUploadLLMDeliveryPath({
 }: {
   toolResource?: string | null;
   mimeType: string;
+  model?: string;
   endpointConfig?: EndpointFileConfig;
   fileConfig?: FileConfig;
   endpoint?: string;
@@ -318,6 +334,7 @@ export function resolveUploadLLMDeliveryPath({
   }
   return resolveDefaultUploadLLMDeliveryPath({
     mimeType,
+    model,
     endpointConfig,
     fileConfig,
     endpoint,
@@ -411,6 +428,7 @@ export interface TurnDeliveryRouting {
   /** The endpoint the file policy is configured under: a custom endpoint's own name, not
    *  the client family initialization runs it as. */
   endpoint: string;
+  model?: string;
   /** The dialect a custom endpoint declares, which decides whether it receives OpenAI-format
    *  media; undefined for a built-in or OpenAI-compatible endpoint. */
   endpointProvider?: string;

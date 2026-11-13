@@ -12,6 +12,7 @@ import type {
   TAgentsEndpoint,
   CloudFrontConfig,
   TCustomEndpoints,
+  TGoogleEndpoint,
   TAssistantEndpoint,
   TAnthropicEndpoint,
   SummarizationConfig,
@@ -154,7 +155,7 @@ export interface AppConfig {
     /** OpenAI endpoint configuration */
     openAI?: Partial<TEndpoint>;
     /** Google endpoint configuration */
-    google?: Partial<TEndpoint>;
+    google?: Partial<TGoogleEndpoint>;
     /** Bedrock endpoint configuration */
     bedrock?: Partial<TEndpoint> & { availableRegions?: string[] };
     /** Anthropic endpoint configuration with optional Vertex AI support */

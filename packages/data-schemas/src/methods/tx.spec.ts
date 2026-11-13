@@ -2,6 +2,7 @@
 import { EModelEndpoint } from 'librechat-data-provider';
 import {
   createTxMethods,
+  getGemini4StandardRates,
   tokenValues,
   cacheTokenValues,
   premiumTokenValues,
@@ -15,6 +16,43 @@ const { getValueKey, getMultiplier, getPremiumRate, getCacheMultiplier } = creat
   {} as typeof import('mongoose'),
   { matchModelName, findMatchingPattern },
 );
+
+describe('Gemini 4 online Standard pricing', () => {
+  it('switches Carbon pricing at the start of December 1 UTC', () => {
+    const cutoff = Date.UTC(2026, 11, 1);
+    expect(getGemini4StandardRates('gemini-4-carbon', 'global', cutoff - 1)).toEqual({
+      prompt: 2,
+      completion: 10,
+      read: 0.1,
+    });
+    expect(getGemini4StandardRates('gemini-4-carbon', 'eu', cutoff - 1)).toEqual({
+      prompt: 2.2,
+      completion: 11,
+      read: 0.11,
+    });
+    expect(getGemini4StandardRates('gemini-4-carbon', undefined, cutoff)).toEqual({
+      prompt: 4,
+      completion: 20,
+      read: 0.2,
+    });
+    expect(getGemini4StandardRates('gemini-4-carbon', 'eu', cutoff)).toEqual({
+      prompt: 4.4,
+      completion: 22,
+      read: 0.22,
+    });
+  });
+
+  it('prices cached Hydrogen tokens and honors a Cloud transaction override', () => {
+    const model = 'gemini-4-hydrogen';
+    const rates = getGemini4StandardRates(model, 'us');
+    expect(rates).toEqual({ prompt: 1.65, completion: 8.25, read: 0.0825 });
+    const endpointTokenConfig = { [model]: rates! };
+    expect(getMultiplier({ model, tokenType: 'completion', endpointTokenConfig })).toBe(8.25);
+    expect(getCacheMultiplier({ model, cacheType: 'read', endpointTokenConfig })).toBe(0.0825);
+    expect(getMultiplier({ model, tokenType: 'completion' })).toBe(7.5);
+    expect(getCacheMultiplier({ model, cacheType: 'read' })).toBe(0.075);
+  });
+});
 
 describe('getValueKey', () => {
   it('should return "16k" for model name containing "gpt-3.5-turbo-16k"', () => {

@@ -22,6 +22,7 @@ import {
 } from './resolve-llm-delivery-path';
 import { mergeFileConfig, supportedMimeTypes, getEndpointFileConfig } from './file-config';
 import { EToolResources } from './types/tools';
+import { Providers } from './schemas';
 
 function resolveTurnLLMDeliveryPath({
   file,
@@ -35,6 +36,53 @@ function resolveTurnLLMDeliveryPath({
 }
 
 describe('resolveDefaultLLMDeliveryPath', () => {
+  describe('Gemini 4 Office and OpenDocument attachments', () => {
+    const mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    it.each([
+      [Providers.GOOGLE, 'gemini-4-carbon'],
+      [Providers.VERTEXAI, 'gemini-4-hydrogen'],
+    ])('delivers the original file through %s for %s', (endpoint, model) => {
+      expect(resolveUploadLLMDeliveryPath({ endpoint, model, mimeType })).toBe('provider');
+      expect(
+        resolveTurnLLMDeliveryPath({
+          endpoint,
+          model,
+          file: { type: mimeType, llmDeliveryPath: 'text', metadata: { destinationChosen: false } },
+        }),
+      ).toBe('provider');
+    });
+
+    it('keeps explicit text routing and older model behavior', () => {
+      const endpoint = Providers.GOOGLE;
+      const model = 'gemini-4-hydrogen';
+      expect(
+        resolveUploadLLMDeliveryPath({
+          endpoint,
+          model,
+          mimeType,
+          toolResource: EToolResources.context,
+        }),
+      ).toBe('text');
+      expect(
+        resolveUploadLLMDeliveryPath({
+          endpoint,
+          model,
+          mimeType,
+          endpointConfig: getEndpointFileConfig({
+            endpoint,
+            fileConfig: mergeFileConfig({
+              endpoints: { [endpoint]: { defaultLLMDeliveryPath: { fallback: 'none' } } },
+            }),
+          }),
+        }),
+      ).toBe('none');
+      expect(resolveUploadLLMDeliveryPath({ endpoint, model: 'gemini-4-argon', mimeType })).toBe(
+        'text',
+      );
+    });
+  });
+
   it('should return system default for images when no config provided', () => {
     expect(resolveDefaultLLMDeliveryPath('image/png')).toBe('provider');
   });

@@ -4,6 +4,7 @@ import type {
   TCustomConfig,
   TAgentsEndpoint,
   TAnthropicEndpoint,
+  TGoogleEndpoint,
 } from 'librechat-data-provider';
 import type { ConfigDerivation } from './derive';
 import type { AppConfig } from '~/types';
@@ -27,7 +28,7 @@ export const loadEndpoints = (
   allowedAddresses?: string[];
   catalogModelsTtlMs?: number;
   openAI?: Partial<import('librechat-data-provider').TEndpoint>;
-  google?: Partial<import('librechat-data-provider').TEndpoint>;
+  google?: Partial<TGoogleEndpoint>;
   bedrock?: Partial<import('librechat-data-provider').TEndpoint>;
   anthropic?: Partial<TAnthropicEndpoint> & {
     vertexConfig?: import('librechat-data-provider').TVertexAIConfig;

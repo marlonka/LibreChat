@@ -15,7 +15,12 @@ import {
   isOpenRouterEffortSupported,
   resolveDropParamsUIKeys,
 } from './parameterSettings';
-import { ReasoningEffort, ReasoningParameterFormat, getSettingsKeys } from './schemas';
+import {
+  ThinkingLevel,
+  ReasoningEffort,
+  ReasoningParameterFormat,
+  getSettingsKeys,
+} from './schemas';
 import { BedrockProviders, EModelEndpoint, Providers } from './types';
 
 const googleParams = paramSettings[EModelEndpoint.google] as SettingDefinition[];
@@ -29,6 +34,31 @@ const hasSetting = (params: SettingDefinition[], key: string) =>
   params.some((param) => param.key === key);
 
 describe('applyModelAwareDefaults', () => {
+  it.each([
+    [
+      'gemini-4-carbon',
+      [ThinkingLevel.unset, ThinkingLevel.low, ThinkingLevel.medium, ThinkingLevel.high],
+    ],
+    [
+      'gemini-4-hydrogen',
+      [
+        ThinkingLevel.unset,
+        ThinkingLevel.low,
+        ThinkingLevel.medium,
+        ThinkingLevel.high,
+        ThinkingLevel.xhigh,
+      ],
+    ],
+  ])('offers only supported controls for %s', (model, options) => {
+    const result = applyModelAwareDefaults(googleParams, EModelEndpoint.google, model);
+
+    expect(result.find((setting) => setting.key === 'thinkingLevel')?.options).toEqual(options);
+    expect(maxOut(result)).toMatchObject({ default: 65_536, range: { max: 65_536 } });
+    for (const key of ['temperature', 'topP', 'topK', 'thinkingBudget']) {
+      expect(hasSetting(result, key)).toBe(false);
+    }
+  });
+
   it('resolves the Google maxOutputTokens default for current Gemini models', () => {
     const result = applyModelAwareDefaults(googleParams, EModelEndpoint.google, 'gemini-2.5-pro');
     expect(maxOut(result)?.default).toBe(65535);

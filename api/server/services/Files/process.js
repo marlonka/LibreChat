@@ -39,6 +39,7 @@ const {
   assertExtractedTextInspectable,
   getFileExtractionLogDetails,
   getUploadExtractedTextPlan,
+  getUploadDeliveryModel,
   resolveUploadFallbackText,
   UPLOAD_EXTRACTED_TEXT_PLANS,
   MAX_STORED_EXTRACTED_TEXT_BYTES,
@@ -838,6 +839,7 @@ const processAgentFileUpload = async ({ req, res, metadata, sseStream }) => {
   const llmDeliveryPath = resolveUploadLLMDeliveryPath({
     toolResource: tool_resource,
     mimeType: file.mimetype,
+    model: getUploadDeliveryModel(metadata),
     endpointConfig,
     fileConfig,
     endpoint,

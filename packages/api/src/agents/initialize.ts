@@ -16,6 +16,8 @@ import {
   replaceSpecialVars,
   providerEndpointMap,
   normalizeEndpointName,
+  getGemini4Model,
+  GEMINI_4_CONTEXT_TOKENS,
 } from 'librechat-data-provider';
 import type {
   AgentToolResources,
@@ -1640,6 +1642,7 @@ export async function initializeAgent(
     agent: {
       provider: agent.provider,
       endpoint: agent.endpoint,
+      model: tokensModel ?? undefined,
       model_parameters: {
         useResponsesApi:
           typeof llmConfig.useResponsesApi === 'boolean' ? llmConfig.useResponsesApi : undefined,
@@ -2813,7 +2816,15 @@ export async function initializeAgent(
 
   const agentMaxContextNum = Number(agentMaxContextTokens) || DEFAULT_MAX_CONTEXT_TOKENS;
   const maxOutputTokensNum = Number(maxOutputTokens) || 0;
-  const baseContextTokens = Math.max(0, agentMaxContextNum - maxOutputTokensNum);
+  const sharedInputLimit =
+    (agent.provider === Providers.GOOGLE || agent.provider === Providers.VERTEXAI) &&
+    getGemini4Model(tokensModel)
+      ? GEMINI_4_CONTEXT_TOKENS - maxOutputTokensNum
+      : Infinity;
+  const baseContextTokens = Math.max(
+    0,
+    Math.min(agentMaxContextNum - maxOutputTokensNum, sharedInputLimit),
+  );
 
   const toMongoFiles = (files: Array<TFile | undefined> | undefined): IMongoFile[] =>
     (files ?? []).filter((a): a is TFile => a != null).map((a) => a as unknown as IMongoFile);
@@ -2953,7 +2964,7 @@ export async function initializeAgent(
       provisionWarnings != null && provisionWarnings.length > 0 ? provisionWarnings : undefined,
     maxContextTokens:
       maxContextTokens != null && maxContextTokens > 0
-        ? maxContextTokens
+        ? Math.min(maxContextTokens, sharedInputLimit)
         : Math.max(1024, Math.round(baseContextTokens * (1 - DEFAULT_RESERVE_RATIO))),
     primedCodeFiles,
     codeContextEntries,

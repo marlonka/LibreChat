@@ -1,8 +1,14 @@
 import { z } from 'zod';
 import type { EndpointFileConfig, FileConfig, RegexLike } from './types/files';
 import type { ResponsesApiRouting } from './types';
-import { EModelEndpoint, isAgentsEndpoint, isDocumentSupportedProvider } from './schemas';
+import {
+  Providers,
+  EModelEndpoint,
+  isAgentsEndpoint,
+  isDocumentSupportedProvider,
+} from './schemas';
 import { gpt6Tier, gpt6Release, gptPointReleaseFamily } from './families';
+import { gemini4OfficeMimeTypes } from './gemini';
 import { normalizeEndpointName } from './utils';
 
 /** Parallel storage deletions during rollback of a failed skill archive import. */
@@ -39,6 +45,9 @@ export const fullMimeTypesList = [
   'text/x-c++',
   'application/csv',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
+  'application/msword',
+  'application/vnd.ms-powerpoint',
   'text/html',
   'text/x-java',
   'application/json',
@@ -371,6 +380,8 @@ export const supportedMimeTypes = [
   /^message\/rfc822$/,
 ];
 
+const googleMimeTypes = [...supportedMimeTypes, ...gemini4OfficeMimeTypes];
+
 export const codeInterpreterMimeTypes = [
   textMimeTypes,
   excelMimeTypes,
@@ -499,6 +510,7 @@ export const codeTypeMapping: { [key: string]: string } = {
   odg: 'application/vnd.oasis.opendocument.graphics', // .odg - OpenDocument Graphics
   doc: 'application/msword', // .doc - Word (legacy)
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx - Word
+  dotx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.template',
   xls: 'application/vnd.ms-excel', // .xls - Excel (legacy)
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx - Excel
   ppt: 'application/vnd.ms-powerpoint', // .ppt - PowerPoint (legacy)
@@ -777,7 +789,7 @@ export const isExplicitMimeConfig = (types?: RegexLike[]): types is RegexLike[] 
   if (!types || types.length === 0) {
     return false;
   }
-  return types !== supportedMimeTypes;
+  return types !== supportedMimeTypes && types !== googleMimeTypes;
 };
 
 /** The kind of content a provider upload path can actually send to the model. */
@@ -862,6 +874,7 @@ const documentMimeExtensions: ReadonlyArray<readonly [string, readonly string[]]
   ['application/pdf', ['.pdf']],
   ['application/msword', ['.doc']],
   ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', ['.docx']],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.template', ['.dotx']],
   ['application/vnd.ms-excel', ['.xls']],
   ['application/msexcel', ['.xls']],
   ['application/x-msexcel', ['.xls']],
@@ -1021,7 +1034,7 @@ export const getConfiguredMimeAccept = (
   capability: MimeUploadCapability,
 ): string | undefined => {
   /** Referential identity with the built-in list signals an unconfigured endpoint (keep provider filter). */
-  if (!types || types.length === 0 || types === supportedMimeTypes) {
+  if (!isExplicitMimeConfig(types)) {
     return undefined;
   }
   if (isPermissiveMimeConfig(types)) {
@@ -1049,9 +1062,13 @@ function mergeWithDefault(
   endpoint?: string | null,
 ): EndpointFileConfig {
   /** Use comprehensive MIME types for document-supported providers */
-  const defaultMimeTypes = isDocumentSupportedProvider(endpoint)
-    ? supportedMimeTypes
-    : defaultConfig.supportedMimeTypes;
+  const isGoogle = endpoint === EModelEndpoint.google || endpoint === Providers.VERTEXAI;
+  let defaultMimeTypes = defaultConfig.supportedMimeTypes;
+  if (isGoogle) {
+    defaultMimeTypes = googleMimeTypes;
+  } else if (isDocumentSupportedProvider(endpoint)) {
+    defaultMimeTypes = supportedMimeTypes;
+  }
 
   return {
     disabled: endpointConfig.disabled ?? defaultConfig.disabled,

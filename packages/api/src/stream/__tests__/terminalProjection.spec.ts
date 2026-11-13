@@ -79,6 +79,23 @@ function buildAttachmentHeavyFinal(bodyChars: number): FinalEvent {
 
 describe('projectTerminalEvent', () => {
   describe('exclusion of transient prompt data', () => {
+    it('keeps replay signatures in server-side message metadata only', () => {
+      const metadata = {
+        thoughtSignatures: { call: 'opaque-signature' },
+        usage: { outputTokens: 10 },
+      };
+      const event: FinalEvent = {
+        final: true,
+        responseMessage: { messageId: 'rm-1', metadata },
+      };
+
+      const projected = projectTerminalEvent(event);
+
+      expect(projected.responseMessage?.metadata).toEqual({ usage: { outputTokens: 10 } });
+      expect(event.responseMessage?.metadata).toBe(metadata);
+      expect(metadata.thoughtSignatures).toEqual({ call: 'opaque-signature' });
+    });
+
     it('excludes fileContext, image_urls and embedded file bodies', () => {
       const projected = projectTerminalEvent(buildAttachmentHeavyFinal(64));
 

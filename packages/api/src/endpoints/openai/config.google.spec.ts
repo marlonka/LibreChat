@@ -631,6 +631,8 @@ describe('getOpenAIConfig - Google Compatibility', () => {
         'gemini-3.8-flash',
         'gemini-4-argon',
         'gemini-4-argon-cyber-permissive',
+        'gemini-4-carbon',
+        'gemini-4-hydrogen',
       ])('does not forward the default level a Flash model fills in (%s)', (model) => {
         const result = getGeminiConfig({ model });
 
@@ -640,6 +642,8 @@ describe('getOpenAIConfig - Google Compatibility', () => {
       it.each([
         ['gemini-4-argon', 'minimal', 'low'],
         ['gemini-4-argon', 'high', 'high'],
+        ['gemini-4-carbon', 'xhigh', 'high'],
+        ['gemini-4-hydrogen', 'xhigh', 'xhigh'],
         ['gemini-4-argon-cyber-permissive', 'low', 'low'],
         ['gemini-3.8-flash', 'minimal', 'low'],
         ['gemini-3.7-flash', 'minimal', 'low'],

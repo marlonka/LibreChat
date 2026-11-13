@@ -8,6 +8,7 @@ import {
   isKnownProviderIdentifier,
   isAssistantsEndpoint,
   isResponsesApiUpload,
+  isMessageFileUpload,
   getEndpointFileConfig,
   resolveUploadLLMDeliveryPath,
   isSpeechProviderConfigured,
@@ -20,12 +21,16 @@ import { getAudioFormat } from '~/files/encode/utils';
 /** The subset of an agent record this module reads. */
 export interface UploadAgent {
   provider?: string;
+  model?: string | null;
 }
 
 /** The subset of upload metadata that determines where a file is routed. */
 export interface UploadMetadata {
   endpoint?: string;
   agent_id?: string;
+  model?: string;
+  agentModel?: string | null;
+  message_file?: string | boolean;
   tool_resource?: string | null;
   /** Azure carries native documents only through the Responses API. Multipart form data
    *  carries it as a string, so it arrives as "true" rather than a boolean. */
@@ -119,13 +124,17 @@ export async function resolveEffectiveToolResource({
   }
 
   const fileConfig = mergeFileConfig(req.config?.fileConfig);
-  const endpoint = await resolveUploadEndpoint({ req, metadata, getAgent });
+  const agent = isAssistantsEndpoint(metadata.endpoint)
+    ? null
+    : await resolveUploadAgent(req, metadata.agent_id, getAgent);
+  const endpoint = agent?.provider || metadata.endpoint;
   const endpointConfig = getEndpointFileConfig({ fileConfig, endpoint });
   const endpointProvider = getCustomEndpointProvider(req.config?.endpoints?.custom, endpoint);
   const file = req.file as UploadFile;
   const path = resolveUploadLLMDeliveryPath({
     toolResource: metadata.tool_resource,
     mimeType: file.mimetype,
+    model: getUploadDeliveryModel({ ...metadata, agentModel: agent?.model }),
     endpointConfig,
     fileConfig,
     endpoint,
@@ -152,4 +161,13 @@ export async function resolveEffectiveToolResource({
     throw new UnsupportedProviderAudioError();
   }
   return path === 'text' ? EToolResources.context : undefined;
+}
+
+/** Saved agent identity wins over the model hint supplied by a chat upload. */
+export function getUploadDeliveryModel(metadata: UploadMetadata): string | undefined {
+  if (!isMessageFileUpload(metadata.message_file)) {
+    return undefined;
+  }
+  const model = metadata.agentModel ?? metadata.model;
+  return typeof model === 'string' ? model : undefined;
 }

@@ -47,6 +47,30 @@ describe('resolveTokenConfigMap', () => {
     expect(mockCacheGet).not.toHaveBeenCalled();
   });
 
+  it('preserves zero-valued Gemini 4 pricing overrides for model aliases', async () => {
+    const appConfig = appConfigWith([]);
+    appConfig.endpoints = {
+      google: {
+        tokenConfig: {
+          'gemini-4-carbon': { prompt: 0, completion: 0, cacheRead: 0 },
+        },
+      },
+    };
+    const model = 'models/gemini-4-carbon';
+
+    const map = await resolveTokenConfigMap(
+      { appConfig, modelsConfig: { google: [model] }, userId: 'user-1' },
+      deps,
+    );
+
+    expect(map.google[model]).toEqual({
+      context: 1_048_576,
+      prompt: 0,
+      completion: 0,
+      cacheRead: 0,
+    });
+  });
+
   it('falls back to the cached fetched config when no static override exists', async () => {
     mockCacheGet.mockResolvedValue({ 'custom-model': { prompt: 2, completion: 6, context: 8000 } });
     const appConfig = appConfigWith([{ name: 'MyProxy', models: { fetch: true } }]);

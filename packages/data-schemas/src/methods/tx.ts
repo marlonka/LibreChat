@@ -1,3 +1,5 @@
+import { getGemini4Model } from 'librechat-data-provider';
+
 /**
  * Token Pricing Configuration
  *
@@ -27,6 +29,40 @@ export interface TxDeps {
 }
 
 export const defaultRate = 6;
+
+const carbonIntroEnds = Date.UTC(2026, 11, 1);
+const hydrogenRates = { prompt: 1.5, completion: 7.5, read: 0.075 };
+const carbonIntroRates = { prompt: 2, completion: 10, read: 0.1 };
+
+/**
+ * USD per million tokens for native online Standard requests. With no Cloud location,
+ * the rates are for the paid Gemini Developer API, which shares the global Cloud rates.
+ * @see https://aistudio.google.com/docs/pricing
+ * @see https://cloud.google.com/model-garden/pricing
+ */
+export function getGemini4StandardRates(
+  model: string,
+  location?: string,
+  now: number = Date.now(),
+): { prompt: number; completion: number; read: number } | undefined {
+  switch (getGemini4Model(model)?.id) {
+    case 'gemini-4-hydrogen':
+      return location && location !== 'global'
+        ? { prompt: 1.65, completion: 8.25, read: 0.0825 }
+        : hydrogenRates;
+    case 'gemini-4-carbon':
+      if (now < carbonIntroEnds) {
+        return location && location !== 'global'
+          ? { prompt: 2.2, completion: 11, read: 0.11 }
+          : carbonIntroRates;
+      }
+      return location && location !== 'global'
+        ? { prompt: 4.4, completion: 22, read: 0.22 }
+        : { prompt: 4, completion: 20, read: 0.2 };
+    default:
+      return undefined;
+  }
+}
 
 /** AWS Bedrock pricing (source: https://aws.amazon.com/bedrock/pricing/) */
 const bedrockValues: Record<string, { prompt: number; completion: number }> = {
@@ -259,6 +295,8 @@ export const tokenValues: Record<string, { prompt: number; completion: number }>
     'gemini-3.8-flash': { prompt: 0.75, completion: 3.75 },
     // Gemini 4 Argon introductory pricing through 2026-11-30; revert to { prompt: 4, completion: 20 } on 2026-12-01.
     'gemini-4-argon': { prompt: 2, completion: 10 },
+    'gemini-4-carbon': { prompt: 4, completion: 20 },
+    'gemini-4-hydrogen': { prompt: hydrogenRates.prompt, completion: hydrogenRates.completion },
     'gemini-pro-vision': { prompt: 0.5, completion: 1.5 },
     grok: { prompt: 2.0, completion: 10.0 },
     'grok-beta': { prompt: 5.0, completion: 15.0 },
@@ -701,7 +739,15 @@ export function createTxMethods(
       }
     }
 
-    if (valueKey && tokenType) {
+    if (!tokenType) {
+      return 1;
+    }
+    const gemini4Rate = getGemini4StandardRates(valueKey ?? model ?? '')?.[tokenType];
+    if (gemini4Rate != null) {
+      return gemini4Rate;
+    }
+
+    if (valueKey) {
       const premiumRate = getPremiumRate(valueKey, tokenType, inputTokenCount);
       if (premiumRate != null) {
         return premiumRate;
@@ -709,7 +755,7 @@ export function createTxMethods(
       return tokenValues[valueKey]?.[tokenType] ?? defaultRate;
     }
 
-    if (!tokenType || !model) {
+    if (!model) {
       return 1;
     }
 
@@ -804,6 +850,13 @@ export function createTxMethods(
        *  cache rates rather than reporting no cache pricing */
       if (modelConfig) {
         return modelConfig[cacheType as string] ?? null;
+      }
+    }
+
+    if (cacheType === 'read') {
+      const gemini4Rate = getGemini4StandardRates(valueKey ?? model ?? '')?.read;
+      if (gemini4Rate != null) {
+        return gemini4Rate;
       }
     }
 

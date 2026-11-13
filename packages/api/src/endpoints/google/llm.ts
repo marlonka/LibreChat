@@ -1,13 +1,24 @@
 import { Providers } from '@librechat/agents';
 import { logger } from '@librechat/data-schemas';
-import { googleSettings, AuthKeys, removeNullishValues } from 'librechat-data-provider';
+import {
+  AuthKeys,
+  getGemini4Model,
+  googleSettings,
+  removeNullishValues,
+} from 'librechat-data-provider';
 import type { GoogleClientOptions, VertexAIClientOptions } from '@librechat/agents';
 import type { GoogleAIToolType } from '@librechat/agents/langchain/google-common';
 import type * as t from '~/types';
 import { mergeGoogleHeaders } from '~/utils/headers';
 import { isEnabled } from '~/utils';
 
-type GoogleThinkingLevel = 'THINKING_LEVEL_UNSPECIFIED' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
+type GoogleThinkingLevel =
+  | 'THINKING_LEVEL_UNSPECIFIED'
+  | 'MINIMAL'
+  | 'LOW'
+  | 'MEDIUM'
+  | 'HIGH'
+  | 'XHIGH';
 type GoogleThinkingConfig = {
   includeThoughts?: boolean;
   thinkingLevel?: GoogleThinkingLevel;
@@ -24,8 +35,15 @@ type GeminiFlashThinkingRule = {
   blockedParams?: ReadonlyArray<string>;
 };
 
-/** Argon returns HTTP 400 for a candidate count; `n` is its OpenAI-compatible alias. */
-const geminiArgonBlockedParams = ['candidateCount', 'candidate_count', 'n'] as const;
+/** Gemini 4 fixes the candidate count at one. */
+const gemini4CandidateParams = ['candidateCount', 'candidate_count', 'n'] as const;
+
+const gemini4BlockedParams = [
+  ...gemini4CandidateParams,
+  'cachedContent',
+  'cached_content',
+  'maxReasoningTokens',
+] as const;
 
 /**
  * Gemini Flash models (3.5+) that drop the deprecated sampling parameters
@@ -52,13 +70,13 @@ const geminiFlashThinkingRules: ReadonlyArray<GeminiFlashThinkingRule> = [
     id: 'gemini-4-argon-cyber-permissive',
     default: 'HIGH',
     substitutions: { MINIMAL: 'LOW' },
-    blockedParams: geminiArgonBlockedParams,
+    blockedParams: gemini4CandidateParams,
   },
   {
     id: 'gemini-4-argon',
     default: 'MEDIUM',
     substitutions: { MINIMAL: 'LOW' },
-    blockedParams: geminiArgonBlockedParams,
+    blockedParams: gemini4CandidateParams,
   },
   { id: 'gemini-3.8-flash', default: 'MEDIUM', substitutions: { MINIMAL: 'LOW' } },
   { id: 'gemini-3.7-flash', default: 'MEDIUM', substitutions: { MINIMAL: 'LOW' } },
@@ -87,17 +105,8 @@ const googleThinkingLevels = new Set<GoogleThinkingLevel>([
   'LOW',
   'MEDIUM',
   'HIGH',
+  'XHIGH',
 ]);
-
-/**
- * Models served only from the `global`, `us` and `eu` multi-region endpoints.
- * With `GOOGLE_LOC` unset they use `global` instead of the `us-central1`
- * regional default, which does not serve them. A configured regional location
- * moves to the multi-region that contains it, so data stays in the same
- * geography; a region outside `us` and `eu` is kept rather than sent to `global`.
- * @see https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/4-argon
- */
-const vertexMultiRegionOnlyModels = ['gemini-4-argon'] as const;
 
 const vertexRegionMultiRegions: ReadonlyArray<[prefix: string, multiRegion: string]> = [
   ['europe-', 'eu'],
@@ -211,11 +220,28 @@ function matchesGeminiModelId(model: string, id: string): boolean {
 }
 
 function getGeminiFlashThinkingRule(model: string): GeminiFlashThinkingRule | undefined {
+  const gemini4 = getGemini4Model(model);
+  if (gemini4) {
+    return {
+      id: gemini4.id,
+      default: gemini4.defaultThinkingLevel,
+      substitutions: {
+        MINIMAL: 'LOW',
+        ...(!gemini4.supportsXHigh && { XHIGH: 'HIGH' }),
+        THINKING_LEVEL_UNSPECIFIED: gemini4.defaultThinkingLevel,
+      },
+      blockedParams: gemini4BlockedParams,
+    };
+  }
   return geminiFlashThinkingRules.find((rule) => matchesGeminiModelId(model, rule.id));
 }
 
+/**
+ * Models served only from the global, US and EU multi-region endpoints.
+ * @see https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/get-started-with-gemini-4
+ */
 function isVertexMultiRegionOnlyModel(model: string): boolean {
-  return vertexMultiRegionOnlyModels.some((id) => matchesGeminiModelId(model, id));
+  return getGemini4Model(model) != null || matchesGeminiModelId(model, 'gemini-4-argon');
 }
 
 function getDefaultVertexLocation(model: string): string {
@@ -228,6 +254,34 @@ function resolveVertexModelLocation(model: string, location: string): string {
   }
   const match = vertexRegionMultiRegions.find(([prefix]) => location.startsWith(prefix));
   return match?.[1] ?? location;
+}
+
+/** Honor the configured geography, defaulting multi-region models to global only if unset. */
+export function getGoogleVertexLocation(model: string): string {
+  return resolveVertexModelLocation(
+    model,
+    process.env.GOOGLE_LOC || getDefaultVertexLocation(model),
+  );
+}
+
+/** Applies the foreground ceiling to the transport the native SDK will actually use. */
+export function applyGemini4OutputLimit(
+  config: { model?: string | null; maxOutputTokens?: number; disableStreaming?: boolean },
+  streaming = true,
+): void {
+  const model = getGemini4Model(config.model);
+  if (!model) {
+    return;
+  }
+  if (!streaming) {
+    config.disableStreaming = true;
+  }
+  if (typeof config.maxOutputTokens === 'number') {
+    const limit = config.disableStreaming
+      ? model.maxNonStreamingOutputTokens
+      : model.maxOutputTokens;
+    config.maxOutputTokens = Math.min(config.maxOutputTokens, limit);
+  }
 }
 
 /**
@@ -547,9 +601,13 @@ export function getGoogleConfig(
   } = sanitizeModelOptions(options.modelOptions);
 
   /** The level the user selected, else the one the endpoint configures as its default. */
-  const selectedThinkingLevel =
+  const requestedThinkingLevel =
     normalizeGoogleThinkingLevel(thinkingLevel) ??
     normalizeGoogleThinkingLevel(options.defaultParams?.thinkingLevel);
+  const selectedThinkingLevel =
+    requestedThinkingLevel === 'THINKING_LEVEL_UNSPECIFIED' && getGemini4Model(modelOptions.model)
+      ? undefined
+      : requestedThinkingLevel;
 
   let enableWebSearch = web_search;
   let enableUrlContext = url_context;
@@ -618,8 +676,12 @@ export function getGoogleConfig(
     const thinkingConfig: GoogleThinkingConfig = {
       includeThoughts: true,
     };
-    if (selectedThinkingLevel) {
-      thinkingConfig.thinkingLevel = selectedThinkingLevel;
+    const nativeLevel =
+      selectedThinkingLevel === 'XHIGH' && !getGemini4Model(modelName)
+        ? 'HIGH'
+        : selectedThinkingLevel;
+    if (nativeLevel) {
+      thinkingConfig.thinkingLevel = nativeLevel;
     }
     if (provider === Providers.GOOGLE) {
       (llmConfig as { thinkingConfig?: GoogleThinkingConfig }).thinkingConfig = thinkingConfig;
@@ -770,6 +832,7 @@ export function getGoogleConfig(
     (llmConfig as GoogleClientOptions).maxOutputTokens =
       googleSettings.maxOutputTokens.reset(resolvedModel);
   }
+  applyGemini4OutputLimit(llmConfig, options.streaming);
 
   applyGeminiFlashOverrides({
     config: llmConfig,

@@ -237,7 +237,14 @@ describe('GPT-6 Astra', () => {
   });
 });
 
-describe('Gemini 4 Argon', () => {
+describe('Gemini 4 context windows', () => {
+  it.each(['gemini-4-carbon', 'models/gemini-4-hydrogen', 'gemini-4-carbon-001'])(
+    'resolves the shared window for %s',
+    (model) => {
+      expect(getModelMaxTokens(model, EModelEndpoint.google)).toBe(1_048_576);
+    },
+  );
+
   it('resolves the shared 1,048,576-token context window', () => {
     expect(getModelMaxTokens('gemini-4-argon', EModelEndpoint.google)).toBe(1048576);
   });

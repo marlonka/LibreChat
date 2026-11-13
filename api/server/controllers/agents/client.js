@@ -215,6 +215,7 @@ const {
   getChatProjectContextKey,
   isTemporaryTurn,
   hasEntityEmbeddings,
+  restoreGoogleThoughtSignatures,
 } = require('@librechat/api');
 const {
   Run,
@@ -685,10 +686,7 @@ class AgentClient extends BaseClient {
     this.stepMap = stepMap;
     /** @type {Array<UsageMetadata>} */
     this.collectedUsage = collectedUsage;
-    /** Vertex Gemini 3 thought signatures captured during the run, keyed by
-     *  `tool_call_id`. Persisted on `responseMessage.metadata.thoughtSignatures`
-     *  and restored as `additional_kwargs.signatures` on subsequent turns to
-     *  keep tool round-trips valid across DB reconstruction.
+    /** Gemini thought signatures captured during the run, keyed by tool call id.
      *  @type {Record<string, string> | undefined} */
     this.collectedThoughtSignatures = collectedThoughtSignatures;
     /** @type {ArtifactPromises} */
@@ -3717,7 +3715,7 @@ class AgentClient extends BaseClient {
   }
 
   /**
-   * Assembles the response message `metadata`: Vertex thought signatures plus
+   * Assembles the response message `metadata`: Gemini thought signatures plus
    * the persisted context breakdown (Part A) and the usage/cost rollup (Part B),
    * which rebuild the gauge breakdown and branch/total cost across reloads.
    * Returns undefined when nothing was captured.
@@ -4849,6 +4847,11 @@ class AgentClient extends BaseClient {
         toolSet,
         skillPrimeResult?.skills,
         formatOptions,
+      );
+      restoreGoogleThoughtSignatures(
+        initialMessages,
+        this.modelBoundStoredMessages ?? [],
+        this.options.agent.provider,
       );
       if (this.eventActorContinuation !== 'warm') {
         this.eventActorSummary = initialSummary;
